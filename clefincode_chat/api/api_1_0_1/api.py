@@ -1238,28 +1238,39 @@ def get_latest_channels_updates(user_email, last_message_date):
     return {"results": sorted(results, key=lambda d: d["send_date"], reverse=True)}
 
 # ==========================================================================================
+
 @frappe.whitelist()
-def mark_messsages_as_read(user , channel = None, parent_channel = None):
+def mark_messsages_as_read(user=None, channel=None, parent_channel=None):
+    
+    if not user:
+        user = frappe.session.user
+
     if channel:
-        last_message_number = frappe.db.get_value("ClefinCode Chat Channel" , channel , "last_message_number")
+        last_message_number = frappe.db.get_value("ClefinCode Chat Channel", channel, "last_message_number")
         frappe.db.sql(f"""
-        UPDATE `tabClefinCode Chat Channel User`
-        SET last_message_read = {last_message_number} , unread_messages = 0 
-        WHERE user = '{user}' AND parent = '{channel}'""")
+            UPDATE `tabClefinCode Chat Channel User`
+            SET last_message_read = {last_message_number}, unread_messages = 0 
+            WHERE user = '{user}' AND parent = '{channel}'
+        """)
 
     if parent_channel:
-        sub_channels = frappe.db.sql(f"""SELECT ChatChannel.name , last_message_number 
-        FROM `tabClefinCode Chat Channel` AS ChatChannel INNER JOIN `tabClefinCode Chat Channel User` AS ChatChannelUser
-        WHERE parent_channel = '{parent_channel}'
-        AND ChatChannelUser.user = '{user}'
-        ORDER BY modified_date DESC
-        """ , as_dict = True)
+        sub_channels = frappe.db.sql(f"""
+            SELECT ChatChannel.name, last_message_number 
+            FROM `tabClefinCode Chat Channel` AS ChatChannel
+            INNER JOIN `tabClefinCode Chat Channel User` AS ChatChannelUser
+                ON ChatChannelUser.parent = ChatChannel.name
+            WHERE parent_channel = '{parent_channel}'
+              AND ChatChannelUser.user = '{user}'
+            ORDER BY modified_date DESC
+        """, as_dict=True)
 
         for c in sub_channels:
             frappe.db.sql(f"""
-            UPDATE `tabClefinCode Chat Channel User`
-            SET last_message_read = {c.last_message_number} , unread_messages = 0
-            WHERE user = '{user}' AND parent = '{c.name}'""")
+                UPDATE `tabClefinCode Chat Channel User`
+                SET last_message_read = {c.last_message_number}, unread_messages = 0
+                WHERE user = '{user}' AND parent = '{c.name}'
+            """)
+
 # ==========================================================================================
 @frappe.whitelist()
 def update_sub_channel_for_last_message(user , user_email , mentioned_users_emails , last_chat_space_message , last_active_sub_channel , content , chat_room , old_sub_channel = None):
